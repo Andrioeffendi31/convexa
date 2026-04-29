@@ -11,13 +11,14 @@ mkdir -p storage/framework/cache/data \
   bootstrap/cache
 chmod -R ug+rwx storage bootstrap/cache || true
 
+# Run migrations first so the cache table exists for optimize:clear
+if [ "${AUTO_RUN_MIGRATIONS:-true}" = "true" ]; then
+  php artisan migrate --force
+fi
+
 php artisan optimize:clear
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache
-
-if [ "${AUTO_RUN_MIGRATIONS:-true}" = "true" ]; then
-  php artisan migrate --force
-fi
 
 exec php artisan serve --host=0.0.0.0 --port="${PORT:-8080}"
