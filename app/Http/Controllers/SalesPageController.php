@@ -5,9 +5,11 @@ namespace App\Http\Controllers;
 use App\Models\SalesPage;
 use App\Models\SalesPageVersion;
 use App\Support\SalesPageBlueprints;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -98,33 +100,50 @@ class SalesPageController extends Controller
         $generationMeta = null;
         $templateKey = SalesPageBlueprints::normalizeTemplateKey($data['template_key'] ?? null);
 
-        $salesPage = $request->user()->salesPages()->create([
-            ...$data,
-            'public_token' => (string) Str::ulid(),
-            'template_key' => $templateKey,
-            'sections' => [],
-            'html_content' => $initialHtml,
-            'generation_meta' => $generationMeta,
-        ]);
+        try {
+            $salesPage = $request->user()->salesPages()->create([
+                ...$data,
+                'public_token' => (string) Str::ulid(),
+                'template_key' => $templateKey,
+                'sections' => [],
+                'html_content' => $initialHtml,
+                'generation_meta' => $generationMeta,
+            ]);
 
-        $version = $salesPage->versions()->create([
-            'version_number' => 1,
-            'template_key' => $templateKey,
-            'sections' => [],
-            'html_content' => $initialHtml,
-            'generation_meta' => $generationMeta,
-            'summary' => $initialSummary,
-        ]);
+            $version = $salesPage->versions()->create([
+                'version_number' => 1,
+                'template_key' => $templateKey,
+                'sections' => [],
+                'html_content' => $initialHtml,
+                'generation_meta' => $generationMeta,
+                'summary' => $initialSummary,
+            ]);
 
-        $salesPage->messages()->create([
-            'role' => 'assistant',
-            'content' => $initialSummary,
-            'version_id' => $version->id,
-        ]);
+            $salesPage->messages()->create([
+                'role' => 'assistant',
+                'content' => $initialSummary,
+                'version_id' => $version->id,
+            ]);
 
-        $salesPage->update([
-            'active_version_id' => $version->id,
-        ]);
+            $salesPage->update([
+                'active_version_id' => $version->id,
+            ]);
+        } catch (QueryException $exception) {
+            $sqlMessage = strtolower((string) $exception->getMessage());
+
+            if (
+                str_contains($sqlMessage, 'column') ||
+                str_contains($sqlMessage, 'does not exist') ||
+                str_contains($sqlMessage, 'unknown column') ||
+                str_contains($sqlMessage, 'undefined column')
+            ) {
+                throw ValidationException::withMessages([
+                    'database' => 'Database schema is outdated. Please run migrations on Railway (`php artisan migrate --force`) and retry.',
+                ]);
+            }
+
+            throw $exception;
+        }
 
         return redirect()
             ->route('sales-pages.show', $salesPage)
