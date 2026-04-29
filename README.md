@@ -60,3 +60,33 @@ Convexa turns raw product notes into a structured, persuasive sales page. It sup
     - `AI_API_KEY`
 4. Wait for initial deploy to finish, then open the web service URL and run the manual flow:
     - register → create page → regenerate section → save → export → delete
+
+## Deploy to Railway
+
+1. Push this repository to GitHub.
+2. Create a new Railway project and deploy from this repo.
+3. Add PostgreSQL plugin in Railway, then set environment variables on the web service:
+   - `APP_ENV=production`
+   - `APP_DEBUG=false`
+   - `APP_KEY` (generate with `php artisan key:generate --show`)
+   - `APP_URL` (Railway public domain)
+   - `ASSET_URL` (same as `APP_URL`)
+   - `DB_CONNECTION=pgsql`
+   - `DB_URL` (from Railway Postgres `DATABASE_URL`)
+   - `CACHE_STORE=database`
+   - `SESSION_DRIVER=database`
+   - `QUEUE_CONNECTION=database`
+   - `FILESYSTEM_DISK=local`
+   - `LOG_CHANNEL=stderr`
+   - `AI_PROVIDER=groq`
+   - `AI_BASE_URL=https://api.groq.com/openai/v1`
+   - `AI_API_KEY` (your Groq key)
+   - `AI_MODEL=llama-3.3-70b-versatile`
+   - `AI_FALLBACK_MODELS=openai/gpt-oss-120b,meta-llama/llama-4-scout-17b-16e-instruct,qwen/qwen3-32b`
+4. Deploy web service. By default startup script runs:
+   - cache clear/build
+   - `php artisan migrate --force`
+   - `php artisan serve --host=0.0.0.0 --port=$PORT`
+5. (Recommended) Create a second Railway service for queue worker from the same repo:
+   - keep same env vars
+   - set start command to `sh -lc scripts/railway/start-worker.sh`

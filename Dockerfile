@@ -47,8 +47,9 @@ RUN apk add --no-cache \
 COPY --from=vendor /var/www/html /var/www/html
 COPY --from=frontend /var/www/html/public/build /var/www/html/public/build
 
-RUN chmod -R ug+rwx storage bootstrap/cache
+RUN chmod +x scripts/railway/*.sh \
+    && chmod -R ug+rwx storage bootstrap/cache
 
 EXPOSE 10000
 
-CMD ["sh", "-lc", "php artisan serve --host=0.0.0.0 --port=${PORT:-10000}"]
+CMD ["sh", "-lc", "scripts/railway/start-web.sh"]
