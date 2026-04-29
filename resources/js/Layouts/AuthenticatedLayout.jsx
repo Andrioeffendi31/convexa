@@ -1,23 +1,56 @@
 import { Link, usePage } from "@inertiajs/react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-function SidebarLink({ href, active, children, onClick }) {
+function SidebarLink({ href, active, children, shortLabel, collapsed, onClick }) {
     return (
         <Link
             href={href}
             onClick={onClick}
-            className={`block rounded-lg px-4 py-3 text-sm font-medium transition ${
+            title={collapsed ? children : undefined}
+            className={`block rounded-lg text-sm font-medium transition ${
                 active
                     ? "bg-amber-600 text-white shadow-sm"
                     : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+            } ${
+                collapsed
+                    ? "px-2 py-3 text-center"
+                    : "px-4 py-3"
             }`}
         >
-            {children}
+            {collapsed ? shortLabel : children}
         </Link>
     );
 }
 
-function UserPanel({ user, onNavigate }) {
+function UserPanel({ user, collapsed = false, onNavigate }) {
+    if (collapsed) {
+        return (
+            <div className="rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
+                <div className="mb-2 flex h-10 w-full items-center justify-center rounded-lg bg-slate-100 text-sm font-semibold text-slate-700">
+                    {user.name?.charAt(0)?.toUpperCase() ?? "U"}
+                </div>
+                <div className="grid grid-cols-1 gap-2">
+                    <Link
+                        href={route("profile.edit")}
+                        onClick={onNavigate}
+                        className="rounded-lg border border-slate-200 px-2 py-2 text-center text-[11px] font-medium text-slate-700 hover:bg-slate-50"
+                    >
+                        Profile
+                    </Link>
+                    <Link
+                        href={route("logout")}
+                        method="post"
+                        as="button"
+                        onClick={onNavigate}
+                        className="rounded-lg border border-slate-200 bg-red-500 px-2 py-2 text-center text-[11px] font-medium text-white hover:bg-red-600"
+                    >
+                        Logout
+                    </Link>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
             <p className="truncate text-sm font-semibold text-slate-800">
@@ -51,12 +84,14 @@ function UserPanel({ user, onNavigate }) {
 export default function AuthenticatedLayout({ header, children }) {
     const user = usePage().props.auth.user;
     const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+    const [desktopCollapsed, setDesktopCollapsed] = useState(false);
 
     const navItems = useMemo(
         () => [
             {
                 href: route("sales-pages.index"),
                 label: "Sales Pages",
+                shortLabel: "SP",
                 active:
                     route().current("sales-pages.index") ||
                     route().current("sales-pages.show"),
@@ -64,49 +99,113 @@ export default function AuthenticatedLayout({ header, children }) {
             {
                 href: route("sales-pages.create"),
                 label: "New Workspace",
+                shortLabel: "NW",
                 active: route().current("sales-pages.create"),
             },
         ],
         [],
     );
 
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+
+        const stored = window.localStorage.getItem("convexa.sidebar.collapsed");
+        if (stored === "1") {
+            setDesktopCollapsed(true);
+        }
+    }, []);
+
+    const toggleDesktopSidebar = () => {
+        setDesktopCollapsed((prev) => {
+            const next = !prev;
+
+            if (typeof window !== "undefined") {
+                window.localStorage.setItem(
+                    "convexa.sidebar.collapsed",
+                    next ? "1" : "0",
+                );
+            }
+
+            return next;
+        });
+    };
+
     return (
         <div className="min-h-screen bg-slate-50 text-slate-900">
-            <aside className="fixed inset-y-0 left-0 z-30 hidden w-72 border-r border-slate-200 bg-gradient-to-b from-white to-slate-50 lg:flex lg:flex-col">
-                <div className="border-b border-slate-100 px-5 py-5">
+            <aside
+                className={`fixed inset-y-0 left-0 z-30 hidden border-r border-slate-200 bg-gradient-to-b from-white to-slate-50 lg:flex lg:flex-col ${
+                    desktopCollapsed ? "w-20" : "w-72"
+                }`}
+            >
+                <div className={`border-b border-slate-100 py-5 ${desktopCollapsed ? "px-3" : "px-5"}`}>
                     <Link
                         href={route("sales-pages.index")}
-                        className="flex items-center gap-2"
+                        className={`flex items-center ${desktopCollapsed ? "justify-center" : "gap-2"}`}
                     >
                         <div className="flex items-center justify-center rounded-md bg-amber-600 h-8 w-8">
                             <p className="text-sm font-bold tracking-tight text-white">
                                 C
                             </p>
                         </div>
-                        <span className="text-xl font-bold tracking-tight text-slate-900">
-                            Convexa
-                        </span>
+                        {!desktopCollapsed && (
+                            <span className="text-xl font-bold tracking-tight text-slate-900">
+                                Convexa
+                            </span>
+                        )}
                     </Link>
+                    <button
+                        type="button"
+                        onClick={toggleDesktopSidebar}
+                        className={`mt-3 rounded-lg border border-slate-200 p-2 text-slate-500 hover:bg-slate-100 ${
+                            desktopCollapsed ? "mx-auto block" : ""
+                        }`}
+                        aria-label={desktopCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                    >
+                        <svg
+                            className="h-4 w-4"
+                            stroke="currentColor"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                        >
+                            {desktopCollapsed ? (
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth="2"
+                                    d="M9 5l7 7-7 7"
+                                />
+                            ) : (
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth="2"
+                                    d="M15 19l-7-7 7-7"
+                                />
+                            )}
+                        </svg>
+                    </button>
                 </div>
 
-                <nav className="flex-1 space-y-2 px-4 py-4">
+                <nav className={`flex-1 space-y-2 py-4 ${desktopCollapsed ? "px-2" : "px-4"}`}>
                     {navItems.map((item) => (
                         <SidebarLink
                             key={item.href}
                             href={item.href}
                             active={item.active}
+                            shortLabel={item.shortLabel}
+                            collapsed={desktopCollapsed}
                         >
                             {item.label}
                         </SidebarLink>
                     ))}
                 </nav>
 
-                <div className="border-t border-slate-100 px-4 py-4">
-                    <UserPanel user={user} />
+                <div className={`border-t border-slate-100 py-4 ${desktopCollapsed ? "px-2" : "px-4"}`}>
+                    <UserPanel user={user} collapsed={desktopCollapsed} />
                 </div>
             </aside>
 
-            <div className="border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur lg:hidden">
+            <div className="sticky top-0 z-40 border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur lg:hidden">
                 <div className="flex items-center justify-between">
                     <button
                         type="button"
@@ -200,7 +299,7 @@ export default function AuthenticatedLayout({ header, children }) {
                 </div>
             )}
 
-            <div className="lg:pl-72">
+            <div className={desktopCollapsed ? "lg:pl-20" : "lg:pl-72"}>
                 {header && (
                     <header className="border-b border-slate-200/80 bg-white/80 backdrop-blur">
                         <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
