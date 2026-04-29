@@ -26,7 +26,7 @@ COPY public ./public
 COPY vite.config.js tailwind.config.js postcss.config.js jsconfig.json ./
 RUN npm run build
 
-FROM php:8.3-cli-alpine AS app
+FROM php:8.4-cli-alpine AS app
 
 WORKDIR /var/www/html
 
