@@ -108,6 +108,40 @@ class SalesPageTest extends TestCase
         $this->assertNotEmpty($page->html_content);
     }
 
+    public function test_user_can_create_workspace_with_single_feature_input(): void
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)
+            ->post(route('sales-pages.store'), [
+                'product_name' => 'Kajoe Noesa',
+                'product_description' => 'Modern Indonesian custom furniture',
+                'template_key' => 'aurora',
+                'key_features' => ['Authentic design'],
+                'target_audience' => 'B2B',
+                'price' => '10',
+                'unique_selling_points' => ['Original'],
+                'brief_meta' => [
+                    'problem_statement' => 'Bad quality of custom furniture',
+                    'desired_outcome' => 'Beautiful custom furniture',
+                    'primary_cta' => 'Free consultation',
+                    'secondary_cta' => 'Chat now',
+                    'brand_tone' => 'Professional & consultative',
+                    'visual_direction' => 'Modern & clean',
+                    'proof_points' => ['200+ clients'],
+                    'objections' => [],
+                    'competitors' => ['Kayuku'],
+                ],
+            ]);
+
+        $response->assertRedirect();
+
+        $page = SalesPage::query()->firstOrFail();
+        $this->assertSame('Kajoe Noesa', $page->product_name);
+        $this->assertNotEmpty((string) $page->html_content);
+        $this->assertStringContainsString('Authentic design', (string) $page->html_content);
+    }
+
     public function test_store_creates_initial_chat_message_and_version(): void
     {
         $user = User::factory()->create();

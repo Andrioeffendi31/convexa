@@ -56,17 +56,21 @@ class SalesPageBlueprints
         $audience = e(trim((string) ($data['target_audience'] ?? '')) ?: 'Growth-focused teams');
         $price = e(trim((string) ($data['price'] ?? '')) ?: 'Contact sales');
 
+        $defaultFeatures = [
+            'Fast onboarding in days, not months',
+            'Workflow automation for repeatable execution',
+            'Live visibility across your revenue pipeline',
+        ];
+
         $features = array_values(array_filter(array_map(
             fn ($item) => trim((string) $item),
             is_array($data['key_features'] ?? null) ? $data['key_features'] : []
         )));
         if ($features === []) {
-            $features = [
-                'Fast onboarding in days, not months',
-                'Workflow automation for repeatable execution',
-                'Live visibility across your revenue pipeline',
-            ];
+            $features = $defaultFeatures;
         }
+        $features = self::padItems($features, $defaultFeatures, 3);
+        $features = array_map(fn (string $item) => e($item), $features);
 
         $usps = array_values(array_filter(array_map(
             fn ($item) => trim((string) $item),
@@ -380,5 +384,19 @@ HTML;
             fn (string $item) => '<li>'.e($item).'</li>',
             array_slice($items, 0, 6),
         ));
+    }
+
+    private static function padItems(array $items, array $fallbackItems, int $minimum): array
+    {
+        $result = array_values($items);
+        $fallback = array_values($fallbackItems);
+        $index = 0;
+
+        while (count($result) < $minimum && $fallback !== []) {
+            $result[] = (string) $fallback[$index % count($fallback)];
+            $index++;
+        }
+
+        return $result;
     }
 }
