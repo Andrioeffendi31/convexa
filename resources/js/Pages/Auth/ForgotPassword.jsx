@@ -1,54 +1,71 @@
-import InputError from '@/Components/InputError';
-import PrimaryButton from '@/Components/PrimaryButton';
-import TextInput from '@/Components/TextInput';
-import GuestLayout from '@/Layouts/GuestLayout';
-import { Head, useForm } from '@inertiajs/react';
+import { Head, Link, useForm } from "@inertiajs/react";
+import { ArrowRight, CheckCircle2 } from "lucide-react";
+
+import InputError from "@/Components/InputError";
+import InputLabel from "@/Components/InputLabel";
+import TextInput from "@/Components/TextInput";
+import { Button } from "@/Components/ui/button";
+import GuestLayout from "@/Layouts/GuestLayout";
 
 export default function ForgotPassword({ status }) {
     const { data, setData, post, processing, errors } = useForm({
-        email: '',
+        email: "",
     });
 
     const submit = (e) => {
         e.preventDefault();
-
-        post(route('password.email'));
+        post(route("password.email"));
     };
 
     return (
-        <GuestLayout>
+        <GuestLayout
+            eyebrow="Recovery"
+            title="Lupa password?"
+            subtitle="Masukkan email Anda dan kami akan kirim link untuk reset password."
+        >
             <Head title="Forgot Password" />
 
-            <div className="mb-4 text-sm text-gray-600">
-                Forgot your password? No problem. Just let us know your email
-                address and we will email you a password reset link that will
-                allow you to choose a new one.
-            </div>
-
             {status && (
-                <div className="mb-4 text-sm font-medium text-green-600">
+                <div className="mb-5 inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
                     {status}
                 </div>
             )}
 
-            <form onSubmit={submit}>
-                <TextInput
-                    id="email"
-                    type="email"
-                    name="email"
-                    value={data.email}
-                    className="mt-1 block w-full"
-                    isFocused={true}
-                    onChange={(e) => setData('email', e.target.value)}
-                />
-
-                <InputError message={errors.email} className="mt-2" />
-
-                <div className="mt-4 flex items-center justify-end">
-                    <PrimaryButton className="ms-4" disabled={processing}>
-                        Email Password Reset Link
-                    </PrimaryButton>
+            <form onSubmit={submit} className="space-y-5">
+                <div className="space-y-2">
+                    <InputLabel htmlFor="email" value="Email" />
+                    <TextInput
+                        id="email"
+                        type="email"
+                        name="email"
+                        value={data.email}
+                        isFocused
+                        onChange={(e) => setData("email", e.target.value)}
+                        placeholder="you@company.com"
+                    />
+                    <InputError message={errors.email} />
                 </div>
+
+                <Button
+                    type="submit"
+                    size="lg"
+                    className="w-full"
+                    disabled={processing}
+                >
+                    {processing ? "Sending…" : "Email password reset link"}
+                    {!processing && <ArrowRight className="h-4 w-4" />}
+                </Button>
+
+                <p className="text-center text-sm text-text-muted">
+                    Ingat password Anda?{" "}
+                    <Link
+                        href={route("login")}
+                        className="font-medium text-gradient transition hover:opacity-80"
+                    >
+                        Kembali ke login
+                    </Link>
+                </p>
             </form>
         </GuestLayout>
     );

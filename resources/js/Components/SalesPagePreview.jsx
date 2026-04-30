@@ -13,7 +13,7 @@ export default function SalesPagePreview({ input, sections, templateKey }) {
 
     if (!sections) {
         return (
-            <div className="flex h-full min-h-[480px] items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-white/70 p-8 text-center text-sm text-slate-500">
+            <div className="flex h-full min-h-[480px] items-center justify-center rounded-3xl border border-dashed border-border bg-bg-elevated/40 p-8 text-center text-sm text-text-muted">
                 Generate your first draft to preview the landing page.
             </div>
         );

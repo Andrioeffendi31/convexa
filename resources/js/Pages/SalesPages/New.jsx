@@ -98,7 +98,7 @@ export default function New({ templates = [] }) {
     ]);
 
     const briefScorePercent = Math.round((briefScore / 4) * 100);
-    const sectionCardClass = "overflow-hidden border-slate-200 shadow-sm";
+    const sectionCardClass = "overflow-hidden";
 
     const onSubmit = (event) => {
         event.preventDefault();
@@ -139,15 +139,15 @@ export default function New({ templates = [] }) {
             header={
                 <div className="flex flex-wrap items-center justify-between gap-4">
                     <div>
-                        <h2 className="text-2xl font-semibold text-slate-900">
+                        <h2 className="text-2xl font-semibold text-text">
                             Create SaaS Landing Workspace
                         </h2>
-                        <p className="text-sm text-slate-500">
+                        <p className="text-sm text-text-muted">
                             Isi brief seperlunya saja. AI akan melengkapi dan
                             generate draft profesional otomatis.
                         </p>
                     </div>
-                    <p className="mt-1 text-lg font-semibold text-slate-900">
+                    <p className="mt-1 text-lg font-semibold text-text">
                         {briefScorePercent}%
                     </p>
                 </div>
@@ -447,7 +447,7 @@ export default function New({ templates = [] }) {
 
                         <Card className={sectionCardClass}>
                             <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-                                <p className="text-sm text-slate-500">
+                                <p className="text-sm text-text-muted">
                                     Workspace akan membuat starter draft dulu,
                                     lalu auto-generate full draft dari brief
                                     saat kamu membuka halaman chat.

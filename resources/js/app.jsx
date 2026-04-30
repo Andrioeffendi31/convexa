@@ -1,4 +1,5 @@
 import "../css/app.css";
+import "highlight.js/styles/github-dark.css";
 import "./bootstrap";
 
 import { createInertiaApp } from "@inertiajs/react";
@@ -20,6 +21,6 @@ createInertiaApp({
         root.render(<App {...props} />);
     },
     progress: {
-        color: "#ea580c",
+        color: "#a78bfa",
     },
 });

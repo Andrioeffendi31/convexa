@@ -211,7 +211,7 @@ export default function Builder({ mode, templates, salesPage }) {
                 <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
                         <div className="flex items-center gap-3">
-                            <h2 className="text-2xl font-semibold text-slate-900">
+                            <h2 className="text-2xl font-semibold text-text">
                                 {mode === "edit"
                                     ? "Edit sales page"
                                     : "Create sales page"}
@@ -220,7 +220,7 @@ export default function Builder({ mode, templates, salesPage }) {
                                 {templateLabel ?? templateKey}
                             </Badge>
                         </div>
-                        <p className="text-sm text-slate-500">
+                        <p className="text-sm text-text-muted">
                             Generate, refine, and export a conversion-ready
                             landing page.
                         </p>
@@ -295,11 +295,11 @@ export default function Builder({ mode, templates, salesPage }) {
                                         </CardDescription>
                                     </CardHeader>
                                     <CardContent className="space-y-2">
-                                        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 break-all">
+                                        <div className="break-all rounded-lg border border-border bg-bg-subtle p-3 text-xs text-text-muted">
                                             {salesPage.public_url}
                                         </div>
                                         {shareMessage && (
-                                            <p className="text-xs text-slate-500">
+                                            <p className="text-xs text-text-muted">
                                                 {shareMessage}
                                             </p>
                                         )}
@@ -485,7 +485,7 @@ export default function Builder({ mode, templates, salesPage }) {
                                         </p>
                                     )}
                                     {generationMeta && (
-                                        <p className="text-xs text-slate-500">
+                                        <p className="text-xs text-text-muted">
                                             Last AI response:{" "}
                                             {generationMeta.model ??
                                                 "Unknown model"}
@@ -509,7 +509,7 @@ export default function Builder({ mode, templates, salesPage }) {
                                 </CardHeader>
                                 <CardContent>
                                     {!sections ? (
-                                        <div className="rounded-xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                                        <div className="rounded-xl border border-dashed border-border p-6 text-sm text-text-muted">
                                             Generate a page to unlock section
                                             editing.
                                         </div>
@@ -704,7 +704,7 @@ export default function Builder({ mode, templates, salesPage }) {
                                                         (feature, index) => (
                                                             <div
                                                                 key={index}
-                                                                className="space-y-2 rounded-xl border border-slate-200 p-3"
+                                                                className="space-y-2 rounded-xl border border-border p-3"
                                                             >
                                                                 <Input
                                                                     value={

@@ -1,6 +1,6 @@
 const styles = {
     aurora: {
-        frame: "border-amber-200 bg-gradient-to-br from-amber-50 via-white to-sky-100",
+        frame: "border-amber-200/60 bg-gradient-to-br from-amber-50 via-white to-sky-100",
         badge: "bg-amber-100 text-amber-800",
         line: "bg-slate-300",
         block: "bg-white/90 border border-amber-100",
@@ -12,7 +12,7 @@ const styles = {
         block: "bg-slate-900/80 border border-slate-700",
     },
     studio: {
-        frame: "border-rose-200 bg-gradient-to-br from-rose-50 via-white to-indigo-100",
+        frame: "border-rose-200/60 bg-gradient-to-br from-rose-50 via-white to-indigo-100",
         badge: "bg-violet-100 text-violet-700",
         line: "bg-slate-300",
         block: "bg-white/90 border border-rose-100",
@@ -34,8 +34,8 @@ export default function TemplateThumbnail({
             onClick={onClick}
             className={`rounded-xl border p-2 text-left transition ${
                 active
-                    ? "border-slate-900 ring-2 ring-slate-900/10"
-                    : "border-slate-200 hover:border-slate-300"
+                    ? "border-accent/60 ring-2 ring-accent/30 shadow-glow"
+                    : "border-border hover:border-border-strong"
             }`}
         >
             <div
@@ -56,8 +56,8 @@ export default function TemplateThumbnail({
                     <div className={`h-6 rounded ${style.block}`} />
                 </div>
             </div>
-            <div className="mt-2 text-xs font-medium text-slate-800">{name}</div>
-            <div className="mt-0.5 line-clamp-2 text-[11px] text-slate-500">
+            <div className="mt-2 text-xs font-medium text-text">{name}</div>
+            <div className="mt-0.5 line-clamp-2 text-[11px] text-text-muted">
                 {description}
             </div>
         </button>

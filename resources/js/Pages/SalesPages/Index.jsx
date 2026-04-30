@@ -125,10 +125,10 @@ export default function Index({ pages, filters = {}, templates = [] }) {
             header={
                 <div className="flex flex-wrap items-center justify-between gap-4">
                     <div>
-                        <h2 className="text-2xl font-semibold text-slate-900">
+                        <h2 className="text-2xl font-semibold text-text">
                             Sales Pages
                         </h2>
-                        <p className="text-sm text-slate-500">
+                        <p className="text-sm text-text-muted">
                             Manage and iterate on your generated HTML landing
                             pages.
                         </p>
@@ -143,8 +143,8 @@ export default function Index({ pages, filters = {}, templates = [] }) {
 
             <div className="py-8">
                 <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                    <Card className="mb-6 overflow-hidden border-slate-200 shadow-sm">
-                        <CardHeader className="bg-gradient-to-r from-slate-50 to-white">
+                    <Card className="mb-6 overflow-hidden">
+                        <CardHeader className="border-b border-border/40 bg-bg-subtle/40">
                             <CardTitle>History Filters</CardTitle>
                             <CardDescription>
                                 Find pages quickly by product, template, and
@@ -302,7 +302,7 @@ export default function Index({ pages, filters = {}, templates = [] }) {
                         </Card>
                     ) : (
                         <>
-                            <div className="mb-4 flex items-center justify-between text-xs text-slate-500">
+                            <div className="mb-4 flex items-center justify-between text-xs text-text-muted">
                                 <span>
                                     Showing {pages.from} to {pages.to} of{" "}
                                     {pages.total} pages
@@ -322,7 +322,7 @@ export default function Index({ pages, filters = {}, templates = [] }) {
                                                         page.template_key
                                                     ] ?? page.template_key}
                                                 </Badge>
-                                                <span className="text-xs text-slate-400">
+                                                <span className="text-xs text-text-subtle">
                                                     {formatDate(
                                                         page.updated_at,
                                                     )}
@@ -392,7 +392,7 @@ export default function Index({ pages, filters = {}, templates = [] }) {
                                                     Delete
                                                 </Button>
                                             </div>
-                                            <span className="text-xs text-slate-400">
+                                            <span className="text-xs text-text-subtle">
                                                 ID: {page.id}
                                             </span>
                                         </CardContent>

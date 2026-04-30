@@ -5,22 +5,23 @@ import { cva } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-    "inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 ring-offset-white",
+    "inline-flex items-center justify-center gap-2 rounded-lg text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:pointer-events-none disabled:opacity-50",
     {
         variants: {
             variant: {
                 default:
-                    "bg-amber-600 text-white hover:bg-amber-700 active:bg-amber-800",
-                secondary: "bg-slate-100 text-slate-900 hover:bg-slate-200",
-                ghost: "hover:bg-slate-100 text-slate-900",
+                    "bg-gradient-accent text-white shadow-[0_8px_24px_-12px_hsl(var(--accent)/0.6)] hover:shadow-glow active:translate-y-px",
+                secondary:
+                    "bg-bg-elevated text-text border border-border hover:bg-bg-subtle hover:border-border-strong",
+                ghost: "text-text-muted hover:bg-bg-elevated hover:text-text",
                 outline:
-                    "border border-slate-200 bg-white hover:bg-slate-50 text-slate-900",
+                    "border border-border bg-transparent text-text hover:bg-bg-elevated hover:border-border-strong",
                 destructive:
-                    "bg-red-600 text-white hover:bg-red-700 active:bg-red-800",
+                    "bg-red-600 text-white hover:bg-red-500 active:bg-red-700",
             },
             size: {
                 default: "h-10 px-4 py-2",
-                sm: "h-9 px-3",
+                sm: "h-9 px-3 text-xs",
                 lg: "h-11 px-6",
                 icon: "h-10 w-10",
             },

@@ -1,19 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Head, Link } from "@inertiajs/react";
+import { Head, Link, usePage } from "@inertiajs/react";
 import CodeMirror from "@uiw/react-codemirror";
 import { html } from "@codemirror/lang-html";
+import { ChevronDown, Download, ExternalLink, FileCode2, History, Layers } from "lucide-react";
 
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 import { Badge } from "@/Components/ui/badge";
 import { Button } from "@/Components/ui/button";
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-} from "@/Components/ui/card";
-import { Textarea } from "@/Components/ui/textarea";
 import {
     Select,
     SelectContent,
@@ -23,14 +16,15 @@ import {
 } from "@/Components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/Components/ui/tabs";
 
-const listText = (items = []) => (items.length ? items.join(", ") : "-");
+import ChatMessage from "@/Components/chat/ChatMessage";
+import ChatComposer from "@/Components/chat/ChatComposer";
+import ChatEmptyState from "@/Components/chat/ChatEmptyState";
+import StreamingMessage from "@/Components/chat/StreamingMessage";
+import GenerationProgress from "@/Components/chat/GenerationProgress";
+import PreviewSkeleton from "@/Components/chat/PreviewSkeleton";
+import { useStreamingText } from "@/hooks/useStreamingText";
 
-const quickPrompts = [
-    "Improve hero copy and visual hierarchy for enterprise buyers.",
-    "Make this look more premium with better typography and spacing.",
-    "Strengthen pricing section and make CTA more conversion-focused.",
-    "Add modern social proof block with testimonial cards.",
-];
+const listText = (items = []) => (items.length ? items.join(", ") : "-");
 
 function formatDate(value) {
     if (!value) return "";
@@ -42,25 +36,14 @@ function truncateText(value, limit = 52) {
     return value.length > limit ? `${value.slice(0, limit)}...` : value;
 }
 
-function TypingDots() {
-    return (
-        <div className="flex items-center gap-1">
-            <span className="h-2 w-2 animate-bounce rounded-full bg-slate-400 [animation-delay:0ms]" />
-            <span className="h-2 w-2 animate-bounce rounded-full bg-slate-400 [animation-delay:120ms]" />
-            <span className="h-2 w-2 animate-bounce rounded-full bg-slate-400 [animation-delay:240ms]" />
-        </div>
-    );
-}
-
 export default function Chat({ salesPage, messages, versions }) {
+    const userName = usePage().props.auth.user?.name;
     const [chatMessages, setChatMessages] = useState(messages ?? []);
     const [versionList, setVersionList] = useState(versions ?? []);
     const [activeVersionId, setActiveVersionId] = useState(
         salesPage.active_version_id,
     );
-    const [previewHtml, setPreviewHtml] = useState(
-        salesPage.html_content ?? "",
-    );
+    const [previewHtml, setPreviewHtml] = useState(salesPage.html_content ?? "");
     const [generationMeta, setGenerationMeta] = useState(
         salesPage.generation_meta ?? null,
     );
@@ -71,7 +54,7 @@ export default function Chat({ salesPage, messages, versions }) {
     const [errorMessage, setErrorMessage] = useState("");
     const [retryError, setRetryError] = useState("");
     const [autoRetried, setAutoRetried] = useState(false);
-    const [leftPaneWidth, setLeftPaneWidth] = useState(38);
+    const [leftPaneWidth, setLeftPaneWidth] = useState(40);
     const [isResizing, setIsResizing] = useState(false);
     const [isDesktop, setIsDesktop] = useState(false);
     const [viewMode, setViewMode] = useState("preview");
@@ -80,6 +63,9 @@ export default function Chat({ salesPage, messages, versions }) {
     const [codeStatus, setCodeStatus] = useState("");
     const [codeError, setCodeError] = useState("");
 
+    // Streaming animation state
+    const [streamTarget, setStreamTarget] = useState("");
+
     const splitRef = useRef(null);
     const chatListRef = useRef(null);
 
@@ -87,12 +73,37 @@ export default function Chat({ salesPage, messages, versions }) {
         !generationMeta || generationMeta?.status === "failed";
     const isGenerating = isRetryingInitial || isSending;
 
+    const { displayedText: streamedHtml, isStreaming, progress } =
+        useStreamingText({
+            targetText: streamTarget,
+            enabled: !!streamTarget,
+            durationMs: 6000,
+            onDone: () => {
+                setPreviewHtml(streamTarget);
+                setDraftHtml(streamTarget);
+                // Auto-switch to preview after streaming completes
+                setTimeout(() => {
+                    setViewMode("preview");
+                    setStreamTarget("");
+                }, 800);
+            },
+        });
+
+    // While streaming, show progressive text in CodeMirror
+    const codeMirrorValue = isStreaming ? streamedHtml : draftHtml;
+
     const activeVersionLabel = useMemo(
         () =>
             versionList.find((v) => Number(v.id) === Number(activeVersionId))
                 ?.version_number ?? "?",
         [versionList, activeVersionId],
     );
+
+    const startStream = (targetHtml) => {
+        if (!targetHtml) return;
+        setViewMode("code");
+        setStreamTarget(targetHtml);
+    };
 
     const sendMessage = async (messageText = null) => {
         const finalMessage = (messageText ?? prompt).trim();
@@ -118,10 +129,9 @@ export default function Chat({ salesPage, messages, versions }) {
             }
 
             if (version) {
-                setPreviewHtml(version.html_content ?? "");
-                setDraftHtml(version.html_content ?? "");
                 setActiveVersionId(version.id);
                 setVersionList((state) => [version, ...state]);
+                startStream(version.html_content ?? "");
             }
 
             setGenerationMeta(response.data.generation_meta ?? null);
@@ -153,10 +163,9 @@ export default function Chat({ salesPage, messages, versions }) {
             }
 
             if (version) {
-                setPreviewHtml(version.html_content ?? "");
-                setDraftHtml(version.html_content ?? "");
                 setActiveVersionId(version.id);
                 setVersionList((state) => [version, ...state]);
+                startStream(version.html_content ?? "");
             }
 
             setGenerationMeta(response.data.generation_meta ?? null);
@@ -285,37 +294,45 @@ export default function Chat({ salesPage, messages, versions }) {
     useEffect(() => {
         if (!chatListRef.current) return;
         chatListRef.current.scrollTop = chatListRef.current.scrollHeight;
-    }, [chatMessages, isSending]);
+    }, [chatMessages, isSending, isRetryingInitial]);
+
+    const showEmptyState =
+        chatMessages.length === 0 && !isGenerating && !shouldAutoGenerate;
 
     return (
         <AuthenticatedLayout
             header={
                 <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                        <h2 className="text-2xl font-semibold text-slate-900">
-                            AI Workspace
+                    <div className="min-w-0">
+                        <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-text-subtle">
+                            <Layers className="h-3 w-3" />
+                            Workspace
+                        </div>
+                        <h2 className="mt-1 truncate text-2xl font-semibold text-text">
+                            {salesPage.product_name || "AI Workspace"}
                         </h2>
-                        <p className="text-sm text-slate-500">
-                            Brief-to-draft otomatis, lalu iterasi tanpa batas di
-                            chat.
+                        <p className="mt-0.5 text-sm text-text-muted">
+                            Brief-to-draft otomatis, iterasi tanpa batas via chat.
                         </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
                         {salesPage.public_url && (
-                            <Button variant="outline" asChild>
+                            <Button variant="outline" size="sm" asChild>
                                 <a
                                     href={salesPage.public_url}
                                     target="_blank"
                                     rel="noreferrer"
                                 >
+                                    <ExternalLink className="h-3.5 w-3.5" />
                                     Public link
                                 </a>
                             </Button>
                         )}
-                        <Button variant="outline" asChild>
+                        <Button variant="outline" size="sm" asChild>
                             <Link
                                 href={route("sales-pages.export", salesPage.id)}
                             >
+                                <Download className="h-3.5 w-3.5" />
                                 Export HTML
                             </Link>
                         </Button>
@@ -325,235 +342,157 @@ export default function Chat({ salesPage, messages, versions }) {
         >
             <Head title="Chat Workspace" />
 
-            <div className="py-6">
-                <div className="mx-auto max-w-[1400px] px-4 sm:px-6 lg:px-8">
+            <div className="py-4 lg:py-6">
+                <div className="mx-auto max-w-[1500px] px-4 sm:px-6 lg:px-8">
                     {(shouldAutoGenerate || retryError) && (
-                        <Card className="mb-4 overflow-hidden border-sky-200 bg-gradient-to-r from-sky-50 via-cyan-50 to-indigo-50">
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
-                                    {isRetryingInitial ? (
-                                        <>
-                                            <TypingDots />
-                                            Generating first draft...
-                                        </>
-                                    ) : retryError ? (
-                                        "Initial generation needs retry"
-                                    ) : (
-                                        "Preparing your first AI draft"
-                                    )}
-                                </CardTitle>
-                                <CardDescription>
-                                    {retryError ||
-                                        generationMeta?.error ||
-                                        "AI is generating your first landing page draft based on product brief."}
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent className="flex flex-wrap gap-2">
-                                <Button
-                                    onClick={retryInitialGeneration}
-                                    disabled={isRetryingInitial}
-                                >
-                                    {isRetryingInitial
-                                        ? "Generating..."
-                                        : "Regenerate from Brief"}
-                                </Button>
-                            </CardContent>
-                        </Card>
+                        <div className="mb-4 overflow-hidden rounded-2xl border border-accent/30 bg-gradient-to-r from-accent/10 via-accent-2/10 to-transparent p-5">
+                            <div className="flex items-start gap-4">
+                                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-accent text-white shadow-glow animate-pulse-glow">
+                                    <FileCode2 className="h-5 w-5" />
+                                </span>
+                                <div className="min-w-0 flex-1">
+                                    <h3 className="text-base font-semibold text-text">
+                                        {isRetryingInitial
+                                            ? "Generating first draft…"
+                                            : retryError
+                                              ? "Initial generation needs retry"
+                                              : "Preparing your first AI draft"}
+                                    </h3>
+                                    <p className="mt-1 text-sm text-text-muted">
+                                        {retryError ||
+                                            generationMeta?.error ||
+                                            "AI sedang merancang halaman pertama dari product brief."}
+                                    </p>
+                                    <Button
+                                        size="sm"
+                                        className="mt-3"
+                                        onClick={retryInitialGeneration}
+                                        disabled={isRetryingInitial}
+                                    >
+                                        {isRetryingInitial
+                                            ? "Generating…"
+                                            : "Regenerate from Brief"}
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
                     )}
 
                     <div
                         ref={splitRef}
-                        className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_20px_70px_-40px_rgba(15,23,42,0.45)]"
+                        className="relative overflow-hidden rounded-3xl border border-border/70 bg-bg-elevated/40 shadow-premium backdrop-blur-md"
                     >
-                        <div className={isDesktop ? "flex min-h-[760px]" : ""}>
+                        <div className={isDesktop ? "flex min-h-[78vh]" : ""}>
+                            {/* Left pane: chat */}
                             <section
-                                className="bg-slate-50/80 p-4 lg:p-5"
+                                className="flex flex-col border-b border-border/40 bg-bg/40 lg:border-b-0 lg:border-r"
                                 style={
                                     isDesktop
                                         ? { width: `${leftPaneWidth}%` }
                                         : {}
                                 }
                             >
-                                <div className="space-y-4">
-                                    <Card>
-                                        <CardHeader className="pb-3">
-                                            <CardTitle className="text-base">
-                                                Product Brief
-                                            </CardTitle>
-                                            <CardDescription>
-                                                Context awal untuk AI.
-                                            </CardDescription>
-                                        </CardHeader>
-                                        <CardContent className="space-y-2 text-sm text-slate-600">
-                                            <p>
-                                                <strong className="text-slate-900">
-                                                    Product:
-                                                </strong>{" "}
-                                                {salesPage.product_name}
-                                            </p>
-                                            <p>
-                                                <strong className="text-slate-900">
-                                                    Description:
-                                                </strong>{" "}
-                                                {salesPage.product_description}
-                                            </p>
-                                            <p>
-                                                <strong className="text-slate-900">
-                                                    Key features:
-                                                </strong>{" "}
-                                                {listText(
-                                                    salesPage.key_features,
-                                                )}
-                                            </p>
-                                            <p>
-                                                <strong className="text-slate-900">
-                                                    Audience:
-                                                </strong>{" "}
-                                                {salesPage.target_audience ||
-                                                    "-"}
-                                            </p>
-                                            <p>
-                                                <strong className="text-slate-900">
-                                                    Price:
-                                                </strong>{" "}
-                                                {salesPage.price || "-"}
-                                            </p>
-                                            <p>
-                                                <strong className="text-slate-900">
-                                                    USP:
-                                                </strong>{" "}
-                                                {listText(
-                                                    salesPage.unique_selling_points,
-                                                )}
-                                            </p>
-                                            {salesPage.brief_meta
-                                                ?.problem_statement && (
-                                                <p>
-                                                    <strong className="text-slate-900">
-                                                        Customer pain:
-                                                    </strong>{" "}
-                                                    {
-                                                        salesPage.brief_meta
-                                                            .problem_statement
-                                                    }
-                                                </p>
-                                            )}
-                                            {salesPage.brief_meta
-                                                ?.desired_outcome && (
-                                                <p>
-                                                    <strong className="text-slate-900">
-                                                        Desired outcome:
-                                                    </strong>{" "}
-                                                    {
-                                                        salesPage.brief_meta
-                                                            .desired_outcome
-                                                    }
-                                                </p>
-                                            )}
-                                        </CardContent>
-                                    </Card>
+                                {/* Brief collapsible */}
+                                <details className="group border-b border-border/40 px-5 py-3">
+                                    <summary className="flex cursor-pointer list-none items-center justify-between text-sm font-medium text-text-muted transition hover:text-text">
+                                        <span className="inline-flex items-center gap-2">
+                                            <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+                                            Product brief
+                                        </span>
+                                        <ChevronDown className="h-4 w-4 transition group-open:rotate-180" />
+                                    </summary>
+                                    <div className="mt-3 space-y-2 text-xs text-text-muted">
+                                        <p>
+                                            <span className="text-text-subtle">Product:</span>{" "}
+                                            <span className="text-text">{salesPage.product_name}</span>
+                                        </p>
+                                        <p>
+                                            <span className="text-text-subtle">Description:</span>{" "}
+                                            {salesPage.product_description}
+                                        </p>
+                                        <p>
+                                            <span className="text-text-subtle">Key features:</span>{" "}
+                                            {listText(salesPage.key_features)}
+                                        </p>
+                                        <p>
+                                            <span className="text-text-subtle">Audience:</span>{" "}
+                                            {salesPage.target_audience || "-"}
+                                        </p>
+                                        <p>
+                                            <span className="text-text-subtle">Price:</span>{" "}
+                                            {salesPage.price || "-"}
+                                        </p>
+                                        <p>
+                                            <span className="text-text-subtle">USP:</span>{" "}
+                                            {listText(salesPage.unique_selling_points)}
+                                        </p>
+                                    </div>
+                                </details>
 
-                                    <Card>
-                                        <CardHeader className="pb-3">
-                                            <CardTitle className="text-base">
-                                                Chat
-                                            </CardTitle>
-                                            <CardDescription>
-                                                Minta perubahan desain, copy,
-                                                layout.
-                                            </CardDescription>
-                                        </CardHeader>
-                                        <CardContent className="space-y-4">
-                                            <div
-                                                ref={chatListRef}
-                                                className="max-h-[340px] space-y-3 overflow-y-auto rounded-xl border border-slate-200 bg-white p-3"
-                                            >
-                                                {chatMessages.map((message) => (
-                                                    <div
-                                                        key={message.id}
-                                                        className={`rounded-xl p-3 text-sm ${
-                                                            message.role ===
-                                                            "user"
-                                                                ? "ml-7 bg-slate-900 text-white"
-                                                                : "mr-7 border border-slate-200 bg-slate-50 text-slate-700"
-                                                        }`}
-                                                    >
-                                                        <div className="mb-1 text-[11px] uppercase tracking-[0.18em] opacity-70">
-                                                            {message.role}
-                                                        </div>
-                                                        <p className="whitespace-pre-wrap">
-                                                            {message.content}
-                                                        </p>
-                                                    </div>
-                                                ))}
-                                                {isSending && (
-                                                    <div className="mr-7 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-                                                        <div className="mb-2 text-[11px] uppercase tracking-[0.18em] text-slate-400">
-                                                            assistant
-                                                        </div>
-                                                        <TypingDots />
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            <div className="flex flex-wrap gap-2">
-                                                {quickPrompts.map((item) => (
-                                                    <button
-                                                        key={item}
-                                                        type="button"
-                                                        onClick={() =>
-                                                            setPrompt(item)
-                                                        }
-                                                        className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 transition hover:border-slate-300 hover:text-slate-800"
-                                                    >
-                                                        {item}
-                                                    </button>
-                                                ))}
-                                            </div>
-
-                                            <Textarea
-                                                value={prompt}
-                                                onChange={(event) =>
-                                                    setPrompt(
-                                                        event.target.value,
-                                                    )
+                                {/* Messages list */}
+                                <div
+                                    ref={chatListRef}
+                                    className="flex-1 space-y-5 overflow-y-auto scrollbar-thin px-5 py-6"
+                                >
+                                    {showEmptyState ? (
+                                        <ChatEmptyState
+                                            onSuggestion={(p) => {
+                                                setPrompt(p);
+                                                sendMessage(p);
+                                            }}
+                                        />
+                                    ) : (
+                                        chatMessages.map((message, idx) => (
+                                            <ChatMessage
+                                                key={message.id ?? idx}
+                                                message={message}
+                                                userName={userName}
+                                                showRegenerate={
+                                                    !isGenerating &&
+                                                    idx === chatMessages.length - 1
                                                 }
-                                                placeholder="Contoh: Buat hero lebih premium, tambahkan social proof card, dan optimasi pricing section."
-                                                onKeyDown={(event) => {
-                                                    if (
-                                                        event.key === "Enter" &&
-                                                        (event.metaKey ||
-                                                            event.ctrlKey)
-                                                    ) {
-                                                        event.preventDefault();
-                                                        sendMessage();
+                                                onRegenerate={() => {
+                                                    const prevUser = [
+                                                        ...chatMessages,
+                                                    ]
+                                                        .reverse()
+                                                        .find(
+                                                            (m) => m.role === "user",
+                                                        );
+                                                    if (prevUser?.content) {
+                                                        sendMessage(
+                                                            prevUser.content,
+                                                        );
                                                     }
                                                 }}
                                             />
-                                            <p className="text-xs text-slate-400">
-                                                Tip: tekan Cmd/Ctrl + Enter
-                                                untuk kirim cepat.
-                                            </p>
-                                            {errorMessage && (
-                                                <p className="text-sm text-red-600">
-                                                    {errorMessage}
-                                                </p>
-                                            )}
-                                            <Button
-                                                onClick={() => sendMessage()}
-                                                disabled={isSending}
-                                            >
-                                                {isSending ? (
-                                                    <span className="inline-flex items-center gap-2">
-                                                        <TypingDots />
-                                                        Generating...
-                                                    </span>
-                                                ) : (
-                                                    "Send Prompt"
-                                                )}
-                                            </Button>
-                                        </CardContent>
-                                    </Card>
+                                        ))
+                                    )}
+                                    {isGenerating && (
+                                        <StreamingMessage
+                                            label={
+                                                isRetryingInitial
+                                                    ? "Generating first draft…"
+                                                    : "Crafting your update…"
+                                            }
+                                        />
+                                    )}
+                                </div>
+
+                                {/* Composer */}
+                                <div className="border-t border-border/40 bg-bg/40 px-5 py-4">
+                                    {errorMessage && (
+                                        <p className="mb-2 text-xs text-red-400">
+                                            {errorMessage}
+                                        </p>
+                                    )}
+                                    <ChatComposer
+                                        value={prompt}
+                                        onChange={setPrompt}
+                                        onSubmit={() => sendMessage()}
+                                        isSending={isSending}
+                                        disabled={isRetryingInitial}
+                                    />
                                 </div>
                             </section>
 
@@ -562,73 +501,64 @@ export default function Chat({ salesPage, messages, versions }) {
                                     role="separator"
                                     aria-orientation="vertical"
                                     onMouseDown={() => setIsResizing(true)}
-                                    className="group relative w-3 cursor-col-resize bg-slate-100"
+                                    className="group relative w-2 cursor-col-resize bg-transparent"
                                 >
-                                    <div className="absolute inset-y-0 left-1/2 w-[2px] -translate-x-1/2 bg-slate-200 transition group-hover:bg-slate-400" />
+                                    <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border transition group-hover:bg-accent" />
+                                    <div className="absolute left-1/2 top-1/2 h-8 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-border-strong opacity-0 transition group-hover:opacity-100" />
                                 </div>
                             )}
 
-                            <section className="relative min-w-0 flex-1 p-4 lg:p-5">
-                                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                                    <div>
-                                        <h3 className="text-lg font-semibold text-slate-900">
+                            {/* Right pane: preview/code */}
+                            <section className="relative flex min-w-0 flex-1 flex-col p-4 lg:p-5">
+                                <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-text-subtle">
                                             Live Preview
                                         </h3>
-                                        <p className="text-sm text-slate-500">
-                                            Real-time HTML output, siap export.
-                                        </p>
                                     </div>
-                                    <Badge variant="slate">
+                                    <Badge variant="gradient">
                                         Version #{activeVersionLabel}
                                     </Badge>
                                 </div>
 
-                                <div className="mb-4 flex items-center">
-                                    <div className="space-y-2">
-                                        <Select
-                                            value={String(activeVersionId)}
-                                            onValueChange={activateVersion}
-                                        >
-                                            <SelectTrigger className="w-full">
-                                                <SelectValue className="truncate" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {versionList.map((version) => (
-                                                    <SelectItem
-                                                        key={version.id}
-                                                        value={String(
-                                                            version.id,
+                                <div className="mb-3 flex items-center gap-3">
+                                    <Select
+                                        value={String(activeVersionId)}
+                                        onValueChange={activateVersion}
+                                    >
+                                        <SelectTrigger className="w-full">
+                                            <SelectValue className="truncate" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {versionList.map((version) => (
+                                                <SelectItem
+                                                    key={version.id}
+                                                    value={String(version.id)}
+                                                >
+                                                    <span className="block max-w-[240px] truncate sm:max-w-[360px]">
+                                                        #{version.version_number} —{" "}
+                                                        {truncateText(
+                                                            version.summary,
+                                                            60,
                                                         )}
-                                                    >
-                                                        <span className="block max-w-[240px] truncate sm:max-w-[360px]">
-                                                            #
-                                                            {
-                                                                version.version_number
-                                                            }{" "}
-                                                            -{" "}
-                                                            {truncateText(
-                                                                version.summary,
-                                                                60,
-                                                            )}
-                                                        </span>
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                        {isSwitchingVersion && (
-                                            <p className="text-xs text-slate-500">
-                                                Switching version...
-                                            </p>
-                                        )}
-                                    </div>
+                                                    </span>
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    {isSwitchingVersion && (
+                                        <span className="text-xs text-text-subtle">
+                                            Switching…
+                                        </span>
+                                    )}
                                 </div>
 
                                 <Tabs
                                     value={viewMode}
                                     onValueChange={setViewMode}
-                                    className="space-y-3"
+                                    className="flex flex-1 flex-col"
                                 >
-                                    <TabsList className="justify-start">
+                                    <TabsList>
                                         <TabsTrigger value="preview">
                                             Preview
                                         </TabsTrigger>
@@ -637,71 +567,92 @@ export default function Chat({ salesPage, messages, versions }) {
                                         </TabsTrigger>
                                     </TabsList>
 
-                                    <TabsContent value="preview">
-                                        <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                                    <TabsContent
+                                        value="preview"
+                                        className="flex-1"
+                                    >
+                                        <div className="relative h-[calc(78vh-220px)] min-h-[480px] overflow-hidden rounded-2xl border border-border/70 bg-white">
                                             <iframe
                                                 title="Landing page preview"
                                                 srcDoc={previewHtml}
-                                                className="h-[700px] w-full"
+                                                className="h-full w-full"
                                                 sandbox="allow-same-origin allow-scripts"
                                             />
-                                            {isGenerating && (
-                                                <div className="absolute inset-0 flex items-center justify-center bg-white/70 backdrop-blur-[1px]">
-                                                    <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-md">
-                                                        <p className="mb-2 text-sm font-medium text-slate-700">
-                                                            AI is crafting your
-                                                            update...
-                                                        </p>
-                                                        <div className="h-2 w-56 overflow-hidden rounded-full bg-slate-100">
-                                                            <div className="h-full w-1/2 animate-pulse rounded-full bg-slate-700" />
-                                                        </div>
-                                                    </div>
+                                            {(isGenerating || isStreaming) && (
+                                                <div className="absolute inset-0 flex items-stretch bg-bg/95 backdrop-blur-sm">
+                                                    <PreviewSkeleton
+                                                        text={
+                                                            isStreaming
+                                                                ? streamedHtml
+                                                                : ""
+                                                        }
+                                                    />
                                                 </div>
                                             )}
                                         </div>
                                     </TabsContent>
 
-                                    <TabsContent value="code">
+                                    <TabsContent
+                                        value="code"
+                                        className="flex-1"
+                                    >
                                         <div className="space-y-3">
                                             <div className="flex flex-wrap items-center gap-2">
                                                 <Button
                                                     onClick={saveCodeVersion}
-                                                    disabled={isSavingCode}
+                                                    disabled={
+                                                        isSavingCode ||
+                                                        isStreaming
+                                                    }
+                                                    size="sm"
                                                 >
                                                     {isSavingCode
-                                                        ? "Saving..."
+                                                        ? "Saving…"
                                                         : "Save as New Version"}
                                                 </Button>
                                                 <Button
                                                     variant="outline"
+                                                    size="sm"
                                                     onClick={() => {
-                                                        setDraftHtml(
-                                                            previewHtml,
-                                                        );
+                                                        setDraftHtml(previewHtml);
                                                         setCodeError("");
                                                         setCodeStatus(
                                                             "Code reset to active version.",
                                                         );
                                                     }}
+                                                    disabled={isStreaming}
                                                 >
-                                                    Reset to Active Version
+                                                    Reset to Active
                                                 </Button>
                                                 {codeStatus && (
-                                                    <p className="text-xs text-emerald-600">
+                                                    <span className="text-xs text-accent-2">
                                                         {codeStatus}
-                                                    </p>
+                                                    </span>
                                                 )}
                                             </div>
                                             {codeError && (
-                                                <p className="text-sm text-red-600">
+                                                <p className="text-xs text-red-400">
                                                     {codeError}
                                                 </p>
                                             )}
-                                            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-950 text-slate-100">
+                                            {isStreaming && (
+                                                <GenerationProgress
+                                                    text={streamedHtml}
+                                                    progress={progress}
+                                                />
+                                            )}
+                                            <div
+                                                className={`overflow-hidden rounded-2xl border bg-bg-subtle text-text transition ${
+                                                    isStreaming
+                                                        ? "border-accent/40 shadow-glow"
+                                                        : "border-border/60"
+                                                }`}
+                                            >
                                                 <CodeMirror
-                                                    value={draftHtml}
-                                                    height="700px"
+                                                    value={codeMirrorValue}
+                                                    height="600px"
                                                     theme="dark"
+                                                    readOnly={isStreaming}
                                                     basicSetup={{
                                                         lineNumbers: true,
                                                         foldGutter: true,
@@ -709,14 +660,11 @@ export default function Chat({ salesPage, messages, versions }) {
                                                     }}
                                                     extensions={[html()]}
                                                     onChange={(value) => {
+                                                        if (isStreaming) return;
                                                         setDraftHtml(value);
                                                         setPreviewHtml(value);
-                                                        if (codeError) {
-                                                            setCodeError("");
-                                                        }
-                                                        if (codeStatus) {
-                                                            setCodeStatus("");
-                                                        }
+                                                        if (codeError) setCodeError("");
+                                                        if (codeStatus) setCodeStatus("");
                                                     }}
                                                 />
                                             </div>
@@ -724,11 +672,13 @@ export default function Chat({ salesPage, messages, versions }) {
                                     </TabsContent>
                                 </Tabs>
 
+                                {/* Version history */}
                                 <div className="mt-4 space-y-2">
-                                    <h4 className="text-sm font-semibold text-slate-900">
-                                        Version History
-                                    </h4>
-                                    <div className="max-h-[180px] space-y-2 overflow-y-auto pr-1">
+                                    <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-text-subtle">
+                                        <History className="h-3 w-3" />
+                                        Version history
+                                    </div>
+                                    <div className="max-h-[160px] space-y-1.5 overflow-y-auto scrollbar-thin pr-1">
                                         {versionList.map((version) => (
                                             <button
                                                 key={version.id}
@@ -738,25 +688,26 @@ export default function Chat({ salesPage, messages, versions }) {
                                                         String(version.id),
                                                     )
                                                 }
-                                                className={`w-full rounded-xl border p-3 text-left transition ${
+                                                className={`w-full rounded-xl border px-3 py-2 text-left text-xs transition ${
                                                     Number(activeVersionId) ===
                                                     Number(version.id)
-                                                        ? "border-slate-900 bg-slate-50"
-                                                        : "border-slate-200 hover:border-slate-300"
+                                                        ? "border-accent/50 bg-accent/10"
+                                                        : "border-border/60 hover:border-border-strong hover:bg-bg-elevated/60"
                                                 }`}
                                             >
-                                                <div className="text-sm font-semibold text-slate-900">
-                                                    Version #
-                                                    {version.version_number}
+                                                <div className="flex items-center gap-2 font-mono text-text">
+                                                    <span className="text-accent">
+                                                        v{version.version_number}
+                                                    </span>
+                                                    <span className="truncate text-text-muted">
+                                                        {truncateText(
+                                                            version.summary,
+                                                            48,
+                                                        ) || "No summary"}
+                                                    </span>
                                                 </div>
-                                                <p className="mt-1 truncate text-xs text-slate-600">
-                                                    {version.summary ||
-                                                        "No summary"}
-                                                </p>
-                                                <p className="mt-1 text-[11px] text-slate-400">
-                                                    {formatDate(
-                                                        version.created_at,
-                                                    )}
+                                                <p className="mt-0.5 text-[10px] text-text-subtle">
+                                                    {formatDate(version.created_at)}
                                                 </p>
                                             </button>
                                         ))}

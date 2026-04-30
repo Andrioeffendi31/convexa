@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 const Textarea = React.forwardRef(({ className, ...props }, ref) => (
     <textarea
         className={cn(
-            "min-h-[96px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+            "min-h-[96px] w-full rounded-xl border border-border bg-bg-elevated/70 px-3 py-2 text-sm text-text placeholder:text-text-subtle shadow-inner-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50",
             className,
         )}
         ref={ref}
