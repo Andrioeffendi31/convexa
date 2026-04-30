@@ -1,224 +1,149 @@
-# Approach, Tools & Logic — Convexa UI/UX
+# Convexa — Approach, Tools & Logic
 
-A concise document covering how the Convexa UI/UX revamp was designed and implemented: the design approach, libraries used, and the logic behind complex areas (streaming animation, conversation history, theme system).
+## What It Is
 
----
-
-## 1. Goals & Scope
-
-Convexa is an AI Sales Page Generator (Laravel + Inertia + React + Tailwind). The revamp targets:
-
-1. **Landing page** feels premium and modern (on par with v0.dev / Cursor / Bolt.new).
-2. **Code generation animation** feels alive — not just a spinner.
-3. **Chat system** has UX on par with ChatGPT/Claude.ai (markdown, avatars, history, actions).
-4. **Auth pages** (Login/Register/Forgot/Reset/Confirm/Verify) consistent with the dark premium direction.
-5. **Contrast consistency** — zero tolerance for unreadable text caused by leftover light backgrounds.
-
-Key constraint: **the backend is largely unchanged**. All improvements happen on the frontend, except for one additional shared prop added via Inertia middleware for the sidebar conversation list.
+Convexa is an AI-powered sales page generator. Users describe a product, pick a visual template, and the app produces a complete, single-file HTML landing page. From there, users can refine the page through a conversational chat interface, manage versions, preview the output live, edit the raw HTML, export, or share via a public link.
 
 ---
 
-## 2. Design System Approach
+## Tech Stack
 
-### Dark-first with semantic tokens
-
-Choice: **dark-first premium** (zinc/neutral palette + violet→cyan accent), not a dark/light toggle. Rationale: faster to ship, AI-tools vibe, and light mode can be added later without a refactor since tokens are already class-based (`darkMode: 'class'`).
-
-Tokens are defined as HSL CSS variables in [`resources/css/app.css`](../resources/css/app.css), then bridged to Tailwind utilities via `extend.colors` in [`tailwind.config.js`](../tailwind.config.js):
-
-| Token                                 | Role                                              |
-| ------------------------------------- | ------------------------------------------------- |
-| `bg`                                  | Page/canvas background                            |
-| `bg-elevated`                         | Cards, panels, sidebar                            |
-| `bg-subtle`                           | Inset surfaces (inputs, code blocks, hover)       |
-| `border` / `border-strong`            | Subtle / strong dividers                          |
-| `text` / `text-muted` / `text-subtle` | 3-level text hierarchy                            |
-| `accent`                              | Violet (262° 83% 66%) — primary action            |
-| `accent-2`                            | Cyan (188° 95% 60%) — secondary action / success  |
-
-Every class `bg-bg-elevated`, `text-text-muted`, etc. is automatically available because Tailwind 3 supports `<alpha-value>` in custom colors.
-
-### Why tokens instead of hard-coded values?
-
-The previous UI was full of `text-slate-900`, `bg-amber-50`, `bg-gradient-to-r from-slate-50 to-white` — switching to dark made text unreadable. With tokens, every surface carries **meaning** (hierarchy and elevation), not raw color values. Changing the palette means changing one CSS variable.
-
-### Contrast rules
-
-- Body text on `bg-elevated` always uses `text-text` or `text-text-muted` (≥4.5:1 contrast ratio).
-- Border-on-bg uses `/40` or `/60` opacity for softness; avoid solid borders except for hard dividers.
-- Every accent gradient (`bg-gradient-accent`) is always paired with `text-white`, never `text-text` (gradient overshoots dark text).
+| Layer | Choice |
+|---|---|
+| Backend | Laravel 11 (PHP) |
+| Frontend | React 18 via Inertia.js |
+| Styling | Tailwind CSS v3 + Radix UI primitives |
+| Build | Vite |
+| State | Zustand (client), Inertia props (server→client) |
+| Code editor | CodeMirror + `@codemirror/lang-html` |
+| Database | SQLite (single-file, portable) |
+| AI | OpenAI-compatible chat completions (OpenRouter, Groq, or any compatible provider) |
+| Deployment | Railway / Render |
 
 ---
 
-## 3. Tools & Libraries
-
-### Already present (leveraged)
-
-- **Tailwind 3** + `@tailwindcss/forms` — utility-first styling.
-- **shadcn-style primitives** (`Button`, `Card`, `Badge`, `Input`, `Label`, `Select`, `Tabs`, `Textarea`) in [`Components/ui/`](../resources/js/Components/ui) — all repainted to semantic tokens, API unchanged.
-- **Radix UI** (`@radix-ui/react-select`, `react-tabs`, `react-slot`) — accessible primitives.
-- **Inertia.js** + **React 18** — SPA-feel pages without a separate API layer.
-- **CodeMirror** (`@uiw/react-codemirror` + `@codemirror/lang-html`) — HTML editor with syntax highlighting.
-- **lucide-react** — icon set (Sparkles, ArrowRight, Wand2, Layers, Eye/EyeOff, etc.).
-- **class-variance-authority** + **clsx** + **tailwind-merge** — variant management for shadcn primitives.
-- **Headless UI** (`@headlessui/react`) — Modal & Transition.
-- **Zustand** — state store (used in the legacy Builder).
-
-### Added for the revamp
-
-| Library            | Purpose                                        |
-| ------------------ | ---------------------------------------------- |
-| `react-markdown`   | Render markdown in AI messages                 |
-| `remark-gfm`       | Tables, strikethrough, task lists in markdown  |
-| `rehype-highlight` | Syntax highlighting for code blocks            |
-| `highlight.js`     | `github-dark.css` theme for rehype-highlight   |
-
-Deliberately **not using** Framer Motion / GSAP — animations are handled with Tailwind keyframes + `IntersectionObserver`. Lighter bundle, more predictable performance.
-
-### Fonts
-
-- **Inter** (body, UI) + **JetBrains Mono** (code) via Google Fonts CDN, loaded in [`resources/views/app.blade.php`](../resources/views/app.blade.php).
-
----
-
-## 4. Logic & Implementation Highlights
-
-### 4.1 Fake streaming code generation
-
-**Problem**: the backend `SalesPageGenerator` is synchronous — the HTML response arrives all at once. There is no SSE. But users of AI products expect to see code being "typed out."
-
-**Solution**: pure frontend streaming simulation via [`hooks/useStreamingText.js`](../resources/js/hooks/useStreamingText.js).
-
-```js
-const { displayedText, isStreaming, progress } = useStreamingText({
-    targetText: response.html_content,
-    durationMs: 6000,
-    onDone: () => setPreviewHtml(response.html_content),
-});
-```
-
-Core logic:
-
-- `requestAnimationFrame` loop with **ease-out cubic** progression (`1 - (1-t)³`) — starts fast, slows near the end, feels natural.
-- Adaptive duration: for large HTML, capped to `Math.max(2000, total_chars / 4)` so the total stays around 10 seconds.
-- Cleanup in `useEffect` return to prevent frame leaks on re-render.
-
-Wiring in [`Chat.jsx`](../resources/js/Pages/SalesPages/Chat.jsx):
-
-1. When a response arrives, **don't** immediately set `previewHtml` to the full HTML.
-2. Set `streamTarget = response.html_content`, switch tab to `code`.
-3. CodeMirror binds to `streamedHtml` (read-only during streaming).
-4. [`GenerationProgress`](../resources/js/Components/chat/GenerationProgress.jsx) shows a gradient progress bar + section detector (Hero/Features/Pricing/Testimonials/CTA/FAQ/Footer via regex) — each section already present in `displayedText` gets a green checkmark.
-5. [`PreviewSkeleton`](../resources/js/Components/chat/PreviewSkeleton.jsx) in the iframe overlay lights up per-section as the regex detects completed sections.
-6. After `onDone`, set `previewHtml` to the full HTML, auto-switch to the `preview` tab after 800 ms.
-
-Result: feels like AI is typing in real time, with zero backend modifications.
-
-### 4.2 Conversation history sidebar
-
-**Problem**: a ChatGPT-like sidebar needs a list of all the user's sales pages, available on every authenticated page.
-
-**Solution**: shared prop via Inertia middleware. In [`HandleInertiaRequests.php`](../app/Http/Middleware/HandleInertiaRequests.php):
-
-```php
-'recentSalesPages' => fn () => $request->user()
-    ? SalesPage::where('user_id', $request->user()->id)
-        ->latest('updated_at')
-        ->limit(30)
-        ->get(['id', 'product_name', 'updated_at'])
-        ->map(fn ($p) => [...])
-    : [],
-```
-
-On the frontend, [`AuthenticatedLayout.jsx`](../resources/js/Layouts/AuthenticatedLayout.jsx) reads it via `usePage().props.recentSalesPages`. No individual controller changes needed.
-
-Date grouping in [`ConversationList.jsx`](../resources/js/Components/sidebar/ConversationList.jsx):
+## Architecture
 
 ```
-Today / Yesterday / Last 7 days / Last 30 days / Older
+User browser
+    ↕  Inertia.js (no separate REST API — Laravel renders page props directly)
+Laravel routes / controllers
+    ↕  SalesPageGenerator (service)
+OpenAI-compatible /chat/completions endpoint
 ```
 
-Buckets are calculated from the difference between `updated_at` and midnight today. Active state is determined from `usePage().props.salesPage?.id` (automatically available on the Chat page because Inertia propagates page-level props).
-
-### 4.3 Markdown rendering in chat
-
-[`ChatMessage.jsx`](../resources/js/Components/chat/ChatMessage.jsx) uses `react-markdown` with a custom `components` mapper — every tag (`p`, `ul`, `ol`, `li`, `a`, `code`, `pre`, `blockquote`, `h1-3`, `table`) is mapped to Tailwind styling consistent with the dark theme. `rehype-highlight` converts `<code class="language-html">` into spans with `hljs-*` classes, then `highlight.js/styles/github-dark.css` (imported in [`app.jsx`](../resources/js/app.jsx)) colorizes the tokens.
-
-Action buttons (Copy/Regenerate) appear on hover via the `group-hover:opacity-100` Tailwind pattern — no JS state needed for show/hide.
-
-### 4.4 Landing page animations
-
-No animation library used. Strategy:
-
-- **Hero typing demo** ([`LandingHeroDemo.jsx`](../resources/js/Components/landing/LandingHeroDemo.jsx)) — a `requestAnimationFrame` loop that increments `typed.length`, with auto-reset for looping. Code is tokenized into a `CODE_LINES` array with tag + className, then rendered progressively as colored spans.
-- **Scroll reveal** ([`hooks/useReveal.js`](../resources/js/hooks/useReveal.js)) — `IntersectionObserver` toggles `.is-visible` on elements. CSS transition from `opacity-0 translate-y-6` to `opacity-100 translate-y-0` defined in [`app.css`](../resources/css/app.css).
-- **Aurora background** — 3 absolute `<div>` elements with `bg-accent/30 blur-[120px]` + `animate-aurora` keyframe (translate3d + scale). GPU-accelerated, doesn't affect layout.
-
-### 4.5 Auth split-screen
-
-[`GuestLayout.jsx`](../resources/js/Layouts/GuestLayout.jsx) accepts `eyebrow`, `title`, `subtitle` props. 2-column layout (form left, [`AuthShowcase.jsx`](../resources/js/Components/landing/AuthShowcase.jsx) right) on desktop, single-column with subtle aurora on mobile. Login/Register/etc. simply pass props — no duplicate header/footer needed.
-
-[`PasswordInput.jsx`](../resources/js/Components/PasswordInput.jsx) combines `<input type=password>` with an Eye/EyeOff toggle button — reusable in Login, Register, ResetPassword, and ConfirmPassword.
-
-Password strength meter in Register: 4 criteria (length≥8 + uppercase + digit + special char) → score 0–4 → 4 visual bars + label (Weak/Fair/Good/Strong). Pure derivation via `useMemo`, no extra state beyond the input value.
+Inertia.js eliminates the need for a separate JSON API: controllers return `Inertia::render(...)` responses and React pages receive typed props, keeping the data layer thin.
 
 ---
 
-## 5. Code Organization
+## Core Data Model
 
-```
-resources/js/
-├── Components/
-│   ├── ui/              # shadcn primitives (button, card, input, label, badge, textarea, select, tabs)
-│   ├── chat/            # ChatMessage, ChatComposer, ChatEmptyState, StreamingMessage,
-│   │                    # GenerationProgress, PreviewSkeleton, TypingDots
-│   ├── sidebar/         # ConversationList, ConversationItem, UserMenu
-│   ├── landing/         # LandingHeroDemo, FeatureCard, SectionHeader, AuthShowcase
-│   ├── PasswordInput.jsx
-│   └── (legacy: Modal, Dropdown, NavLink, etc. — repainted to dark)
-├── Layouts/
-│   ├── AuthenticatedLayout.jsx   # sidebar + main shell
-│   └── GuestLayout.jsx           # split-screen auth
-├── Pages/
-│   ├── Welcome.jsx               # landing page
-│   ├── Auth/                     # Login, Register, ForgotPassword, ResetPassword, ConfirmPassword, VerifyEmail
-│   └── SalesPages/               # Index, New, Chat, Builder
-├── hooks/
-│   ├── useReveal.js              # IntersectionObserver scroll reveal
-│   └── useStreamingText.js       # Fake streaming RAF loop
-└── app.jsx                       # Inertia bootstrap + highlight.js theme import
-```
+- **SalesPage** — the root entity (product brief, template key, active version pointer, public share token)
+- **SalesPageVersion** — each AI generation or code save creates a version snapshot (HTML content + generation metadata)
+- **SalesPageMessage** — chat turn history per page (role, content, associated version)
 
-**Convention**: page-level components live in `Pages/`. Reusable domain components live in `Components/{domain}/` subfolders. Hooks in `hooks/`. No barrel files (`index.js`) — explicit import paths for discoverability.
+Versions let users roll back to any prior generation. A single `active_version_id` foreign key on `SalesPage` controls what the live preview renders.
 
 ---
 
-## 6. Verification Strategy
+## Generation Flow
 
-For every UI change:
+### Initial generation
 
-1. **Build check** — `npm run build` must exit 0. Ensures JSX is valid, all imports resolve, Tailwind recognizes new classes.
-2. **Backend check** — `php -l` for any modified PHP files; `php artisan route:list` to confirm routes are intact.
-3. **Network shape preserved** — chat & generation request/response unchanged; DevTools Network to verify `{messages, version, generation_meta}` shape.
-4. **Manual browser smoke test** — landing page (aurora + hero demo loop), auth pages (split-screen), sidebar (conversation grouping + active state), Chat workspace (empty state → suggestion → streaming animation → preview switch), markdown rendering, password show/hide, password strength meter.
+1. User fills the brief form (`New.jsx` → `SalesPageController@store`).
+2. Controller creates the `SalesPage` record and immediately renders a **starter HTML blueprint** (`SalesPageBlueprints::renderStarterHtml`) — a deterministic, no-AI template pre-filled with the brief data. This gives instant feedback while the AI runs.
+3. `SalesPageGenerationController@generate` calls `SalesPageGenerator::generateHtmlFromBrief()`.
+4. The service builds a prompt: enhanced brief dossier + template blueprint contract + Pexels image reference + output quality checklist.
+5. A single chat completion request is sent with `response_format: json_object`. The model returns `{"assistant_message": "...", "html_content": "..."}`.
+6. The HTML is normalized (ensures `<!doctype html>` wrapper if missing), saved as a new `SalesPageVersion`, and the page's `active_version_id` is updated.
 
-Build & PHP lint are run automatically. Manual browser testing is handed off to the user.
+### Chat revision
+
+1. User types an instruction in the chat panel (`Chat.jsx`).
+2. `SalesPageChatController@send` calls `SalesPageGenerator::reviseFromChat()`.
+3. The service injects: current HTML draft + recent message history (last 12 turns) + enhanced user instruction.
+4. `enhanceUserInstruction()` classifies the instruction (rewrite vs. focused edit, minimal vs. bold design direction) and injects an execution brief to steer output quality.
+5. Same JSON response format — the assistant message appears in the chat, the new HTML becomes a new version.
 
 ---
 
-## 7. Trade-offs & Future Work
+## AI Prompt Strategy
 
-### Trade-offs made
+The prompts are structured in two parts separated by `---`:
 
-- **Fake streaming, not SSE**: faster to ship, zero risk of backend regression. Consequence: total latency doesn't decrease — the user still waits for the full backend response before the animation starts. Can be improved with SSE later.
-- **No animation library**: lighter bundle, but complex animations (page transitions, layout animations) become harder. Current needs are covered by keyframes + IntersectionObserver.
-- **Sales page templates remain light**: Aurora/Studio/Foundry templates in [`Templates/`](../resources/js/Templates) are intentionally left light — they are **output content** (mockup landing pages the user will deploy), not app UI. Darkening them would break the user's preview experience of the generated result.
-- **Chat.jsx is large (~915 kB)**: CodeMirror + react-markdown + highlight.js are heavy. Can be reduced via dynamic `import()` lazy loading — out of scope for the visual revamp.
+**Instructions** (what to do and how to output it):
+- Mandate complete single-file HTML with inline `<style>`, responsive layout, sticky navbar, print CSS
+- Require Pexels CDN image URLs (not page links) for visual placeholders
+- Demand professional conversion structure: navbar → hero → benefits → features → social proof → pricing → CTA → footer
+- Output schema contract: `{"assistant_message":"...","html_content":"..."}`
 
-### Potential improvements
+**Context** (what to generate it for):
+- Enhanced brief dossier: product name, description, audience, price, features, USPs, brand tone, CTA preferences, proof points, objections — with inferred defaults when fields are empty
+- Template blueprint contract: style/color/tone rules specific to the chosen template (Aurora, Foundry, Studio)
+- Pexels image seed URLs for visual reference
 
-- True SSE streaming from `SalesPageGenerator` so code appears in real time as AI tokens are emitted.
-- Light mode toggle (CSS variables are ready — just set `<html class="light">`).
-- Conversation actions (Rename / Delete) in the sidebar — currently visual-only.
-- Code-split Chat.jsx via route-level dynamic import to reduce the initial bundle.
-- Toast notification system for Copy/Save feedback (currently inline status).
+Model-specific optimizations are applied for `llama-3.3-70b-versatile` (explicit section labels, concrete outcome-oriented language, avoid poetic tone).
+
+---
+
+## Reliability: Model Fallback & Timeouts
+
+`requestStructuredJson()` operates within a configurable **request budget** (default 22 s). It iterates over a primary model plus any configured fallbacks:
+
+- Per-request timeout is clamped to the remaining budget.
+- Retries happen only for model-specific failure codes (400, 403, 404, 422, 429, 500, 503).
+- `ConnectionException` (network-level) triggers a fallback to the next model.
+- Budget exhaustion returns HTTP 408 with a user-readable error.
+
+Error messages are resolved from provider JSON (`error.message`, `message`, `error`) before falling back to plain-text truncation, then matched to friendly user-facing strings per status code.
+
+---
+
+## Templates
+
+Three templates ship as both **starter blueprints** (server-rendered PHP, zero AI cost) and **prompt contracts** (injected into AI context):
+
+| Key | Style |
+|---|---|
+| `aurora` | Clean SaaS — light theme, trust-first, dark CTA accents |
+| `foundry` | Enterprise — dark premium surfaces, cyan accent, executive tone |
+| `studio` | Product storytelling — warm orange accents, feature-first |
+
+The blueprint contract is injected verbatim into the prompt so the model maintains visual consistency across chat revisions.
+
+---
+
+## Frontend: Chat & Preview
+
+- **Split-pane layout** — resizable left (chat) / right (preview) with a drag handle. Collapses to stacked on mobile.
+- **Preview** renders generated HTML in a sandboxed `<iframe>`.
+- **Code editor** (CodeMirror, HTML mode) allows direct HTML editing. Saving creates a new `SalesPageVersion`.
+- **Version selector** — dropdown lists all versions by timestamp/label; activating one calls `SalesPageChatController@activateVersion`.
+- **Streaming animation** — `useStreamingText` hook progressively reveals the HTML string in the preview over ~6 s, giving a smooth "writing" effect. This is simulated client-side animation, not server-sent events.
+- **Auto-generate on load** — if `generation_meta` is absent or `status === "failed"`, the chat page fires a generation request automatically on mount.
+
+---
+
+## Export & Sharing
+
+- **Export** (`/sales-pages/{id}/export`) — streams the active HTML as a downloadable `.html` file.
+- **Public link** (`/s/{token}`) — unauthenticated route renders the active version's HTML in an iframe. Each page has a unique opaque `public_token` (generated on creation).
+
+---
+
+## Rate Limiting
+
+AI-touching routes (`generate`, `regenerate`, `chat`, `retry-initial`) are grouped under the `throttle:ai-generation` middleware alias, configurable in `AppServiceProvider`.
+
+---
+
+## Key Files
+
+| File | Purpose |
+|---|---|
+| [app/Services/SalesPageGenerator.php](../app/Services/SalesPageGenerator.php) | All AI prompt building, HTTP dispatch, fallback logic |
+| [app/Support/SalesPageBlueprints.php](../app/Support/SalesPageBlueprints.php) | Deterministic starter HTML per template |
+| [resources/js/Pages/SalesPages/Chat.jsx](../resources/js/Pages/SalesPages/Chat.jsx) | Main chat + preview interface |
+| [resources/js/Pages/SalesPages/New.jsx](../resources/js/Pages/SalesPages/New.jsx) | Brief intake form |
+| [resources/js/hooks/useStreamingText.js](../resources/js/hooks/useStreamingText.js) | Preview streaming animation |
+| [routes/web.php](../routes/web.php) | All application routes |
